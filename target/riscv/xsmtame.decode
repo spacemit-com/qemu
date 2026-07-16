@@ -45,6 +45,7 @@
 &ame_misc_slide    mx_uimm3 mx_md3 mx_ms1_3
 &ame_misc_to_gpr   rd mx_ms2_3 mx_rs1
 &ame_misc_from_gpr mx_md3 mx_rs1 mx_rs2
+&ame_misc_dup      mx_md3 mx_rs2
 &ame_release
 
 # === Instruction formats ===
@@ -64,6 +65,7 @@
 @ame_misc_slide .... .... .... .... .... .... .... ....   &ame_misc_slide    mx_uimm3=%mx_uimm3 mx_md3=%mx_md3 mx_ms1_3=%mx_ms1_3
 @ame_misc_to_gpr .... .... .... .... .... .... .... ....  &ame_misc_to_gpr   rd=%rd mx_ms2_3=%mx_ms2_3 mx_rs1=%mx_rs1
 @ame_misc_from_gpr .... .... .... .... .... .... .... .... &ame_misc_from_gpr mx_md3=%mx_md3 mx_rs1=%mx_rs1 mx_rs2=%mx_rs2
+@ame_misc_dup  .... .... .... .... .... .... .... ....   &ame_misc_dup      mx_md3=%mx_md3 mx_rs2=%mx_rs2
 
 
 # =====================================================================
@@ -99,6 +101,10 @@ mmovb_m_x        0011 11 1 ..... ..... 000 00 ... 0101011     @ame_misc_from_gpr
 mmovh_m_x        0011 11 1 ..... ..... 000 01 ... 0101011     @ame_misc_from_gpr
 mmovw_m_x        0011 11 1 ..... ..... 000 10 ... 0101011     @ame_misc_from_gpr
 mmovd_m_x        0011 11 1 ..... ..... 000 11 ... 0101011     @ame_misc_from_gpr
+mdupb_m_x        0011 11 0 ..... 00000 000 00 ... 0101011     @ame_misc_dup
+mduph_m_x        0011 11 0 ..... 00000 000 01 ... 0101011     @ame_misc_dup
+mdupw_m_x        0011 11 0 ..... 00000 000 10 ... 0101011     @ame_misc_dup
+mdupd_m_x        0011 11 0 ..... 00000 000 11 ... 0101011     @ame_misc_dup
 mpack_mm         0100 11 000 ... 00 ... 000 00 ... 0101011    @ame_misc_rrr
 mpackhl_mm       0100 11 010 ... 00 ... 000 00 ... 0101011    @ame_misc_rrr
 mpackhh_mm       0100 11 011 ... 00 ... 000 00 ... 0101011    @ame_misc_rrr
@@ -107,9 +113,16 @@ mrslideup        0110 11 ... 000 00 ... 000 00 ... 0101011    @ame_misc_slide
 mcslidedown_b    0111 11 ... 000 00 ... 000 00 ... 0101011    @ame_misc_slide
 mcslidedown_h    0111 11 ... 000 01 ... 000 01 ... 0101011    @ame_misc_slide
 mcslidedown_w    0111 11 ... 000 10 ... 000 10 ... 0101011    @ame_misc_slide
+mcslidedown_d    0111 11 ... 000 11 ... 000 11 ... 0101011    @ame_misc_slide
 mcslideup_b      1000 11 ... 000 00 ... 000 00 ... 0101011    @ame_misc_slide
 mcslideup_h      1000 11 ... 000 01 ... 000 01 ... 0101011    @ame_misc_slide
 mcslideup_w      1000 11 ... 000 10 ... 000 10 ... 0101011    @ame_misc_slide
+mcslideup_d      1000 11 ... 000 11 ... 000 11 ... 0101011    @ame_misc_slide
+mrbca_mv_i       1001 11 ... 000 00 ... 000 00 ... 0101011    @ame_misc_slide
+mcbcab_mv_i      1010 11 ... 000 00 ... 000 00 ... 0101011    @ame_misc_slide
+mcbcah_mv_i      1010 11 ... 000 01 ... 000 01 ... 0101011    @ame_misc_slide
+mcbcaw_mv_i      1010 11 ... 000 10 ... 000 10 ... 0101011    @ame_misc_slide
+mcbcad_mv_i      1010 11 ... 000 11 ... 000 11 ... 0101011    @ame_misc_slide
 
 # --- Memory: contiguous / strided load/store ---
 # Whole-matrix loads/stores first, then strided helpers in canonical family order.

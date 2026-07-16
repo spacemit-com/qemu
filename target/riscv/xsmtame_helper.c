@@ -359,6 +359,66 @@ static void xsmtame_mmov_m_x_common(CPURISCVState *env, uint32_t md,
     }
 }
 
+static void xsmtame_zero_tile_load_inactive_region(CPURISCVState *env,
+                                                   uint32_t td,
+                                                   size_t elem_size,
+                                                   uint32_t rows,
+                                                   uint32_t cols)
+{
+    size_t reg_size = ame_env_tlenb(env);
+    size_t row_bytes = xsmtame_matrix_layout(env, td, elem_size).row_bytes;
+    size_t total_rows = row_bytes ? reg_size / row_bytes : 0;
+    size_t loaded_bytes = (size_t)cols * elem_size;
+    uint8_t *tile = xsmtame_tile_ptr(env, td);
+    size_t row;
+
+    g_assert(elem_size != 0);
+    g_assert(rows <= total_rows);
+    g_assert(loaded_bytes <= row_bytes);
+
+    if (loaded_bytes < row_bytes) {
+        for (row = 0; row < rows; row++) {
+            memset(tile + row * row_bytes + loaded_bytes, 0,
+                   row_bytes - loaded_bytes);
+        }
+    }
+    if (rows < total_rows) {
+        memset(tile + rows * row_bytes, 0,
+               (total_rows - rows) * row_bytes);
+    }
+}
+
+static void xsmtame_zero_acc_load_inactive_region(CPURISCVState *env,
+                                                  uint32_t ad,
+                                                  size_t elem_size,
+                                                  uint32_t rows,
+                                                  uint32_t cols,
+                                                  bool transpose)
+{
+    size_t reg_size = ame_env_acc_len_b(env);
+    size_t row_bytes = xsmtame_matrix_layout(env, ad + AME_NR_TILES,
+                                             elem_size).row_bytes;
+    size_t total_rows = row_bytes ? reg_size / row_bytes : 0;
+    size_t loaded_bytes = (size_t)cols * elem_size;
+    uint8_t *acc = xsmtame_acc_ptr(env, ad);
+    size_t row;
+
+    g_assert(elem_size != 0);
+    g_assert(rows <= total_rows);
+    g_assert(loaded_bytes <= row_bytes);
+
+    if (transpose) {
+        for (row = rows; row < total_rows; row++) {
+            memset(acc + row * row_bytes, 0, loaded_bytes);
+        }
+    } else if (loaded_bytes < row_bytes) {
+        for (row = 0; row < rows; row++) {
+            memset(acc + row * row_bytes + loaded_bytes, 0,
+                   row_bytes - loaded_bytes);
+        }
+    }
+}
+
 static inline void xsmtame_load_tile8_stride(uint8_t *tile,
                                              CPURISCVState *env,
                                              uint32_t reg,
@@ -379,6 +439,9 @@ static inline void xsmtame_load_tile8_stride(uint8_t *tile,
                               row * stride + col));
         }
     }
+
+    xsmtame_zero_tile_load_inactive_region(env, reg, sizeof(*tile),
+                                           rows, cols);
 }
 
 static inline void xsmtame_store_tile8_stride(const uint8_t *tile,
@@ -423,6 +486,9 @@ static inline void xsmtame_load_tile16_stride(uint16_t *tile16,
                               row * stride + col * sizeof(*tile16)));
         }
     }
+
+    xsmtame_zero_tile_load_inactive_region(env, reg, sizeof(*tile16),
+                                           rows, cols);
 }
 
 static inline void xsmtame_store_tile16_stride(const uint16_t *tile16,
@@ -467,6 +533,9 @@ static inline void xsmtame_load_tile32_stride(uint32_t *tile32,
                              row * stride + col * sizeof(*tile32)));
         }
     }
+
+    xsmtame_zero_tile_load_inactive_region(env, reg, sizeof(*tile32),
+                                           rows, cols);
 }
 
 static inline void xsmtame_store_tile32_stride(const uint32_t *tile32,
@@ -500,7 +569,8 @@ static inline void xsmtame_load_acc8_stride(uint8_t *acc8,
                                             uint32_t cols,
                                             bool transpose)
 {
-    size_t row_bytes = xsmtame_matrix_layout(env, reg, 0).row_bytes;
+    size_t row_bytes = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                             0).row_bytes;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -511,6 +581,9 @@ static inline void xsmtame_load_acc8_stride(uint8_t *acc8,
                               row * stride + col));
         }
     }
+
+    xsmtame_zero_acc_load_inactive_region(env, reg, sizeof(*acc8),
+                                          rows, cols, transpose);
 }
 
 static inline void xsmtame_store_acc8_stride(const uint8_t *acc8,
@@ -522,7 +595,8 @@ static inline void xsmtame_store_acc8_stride(const uint8_t *acc8,
                                              uint32_t cols,
                                              bool transpose)
 {
-    size_t row_bytes = xsmtame_matrix_layout(env, reg, 0).row_bytes;
+    size_t row_bytes = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                             0).row_bytes;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -544,7 +618,8 @@ static inline void xsmtame_load_acc16_stride(uint16_t *acc16,
                                              uint32_t cols,
                                              bool transpose)
 {
-    size_t cols_per_row = xsmtame_matrix_layout(env, reg, sizeof(*acc16)).cols;
+    size_t cols_per_row = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                                sizeof(*acc16)).cols;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -555,6 +630,9 @@ static inline void xsmtame_load_acc16_stride(uint16_t *acc16,
                               row * stride + col * sizeof(*acc16)));
         }
     }
+
+    xsmtame_zero_acc_load_inactive_region(env, reg, sizeof(*acc16),
+                                          rows, cols, transpose);
 }
 
 static inline void xsmtame_store_acc16_stride(const uint16_t *acc16,
@@ -566,7 +644,8 @@ static inline void xsmtame_store_acc16_stride(const uint16_t *acc16,
                                               uint32_t cols,
                                               bool transpose)
 {
-    size_t cols_per_row = xsmtame_matrix_layout(env, reg, sizeof(*acc16)).cols;
+    size_t cols_per_row = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                                sizeof(*acc16)).cols;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -588,7 +667,8 @@ static inline void xsmtame_load_acc32_stride(uint32_t *acc32,
                                              uint32_t cols,
                                              bool transpose)
 {
-    size_t cols_per_row = xsmtame_matrix_layout(env, reg, sizeof(*acc32)).cols;
+    size_t cols_per_row = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                                sizeof(*acc32)).cols;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -599,6 +679,9 @@ static inline void xsmtame_load_acc32_stride(uint32_t *acc32,
                               row * stride + col * sizeof(*acc32)));
         }
     }
+
+    xsmtame_zero_acc_load_inactive_region(env, reg, sizeof(*acc32),
+                                          rows, cols, transpose);
 }
 
 static inline void xsmtame_store_acc32_stride(const uint32_t *acc32,
@@ -610,7 +693,8 @@ static inline void xsmtame_store_acc32_stride(const uint32_t *acc32,
                                               uint32_t cols,
                                               bool transpose)
 {
-    size_t cols_per_row = xsmtame_matrix_layout(env, reg, sizeof(*acc32)).cols;
+    size_t cols_per_row = xsmtame_matrix_layout(env, reg + AME_NR_TILES,
+                                                sizeof(*acc32)).cols;
     uint32_t row, col;
 
     for (row = 0; row < rows; row++) {
@@ -878,21 +962,44 @@ static inline uint16_t xsmtame_mfmacc_f32_to_bf16_bits(float32 raw,
     return (uint16_t)float32_to_bfloat16(raw, fpst);
 }
 
-static inline float32 xsmtame_mfmacc_fp8_to_f32(uint8_t raw,
-                                                     uint8_t exp_bits,
-                                                     uint8_t frac_bits,
-                                                     int16_t exp_bias,
+static inline float32 xsmtame_mfmacc_e4_to_f32(uint8_t raw,
                                                      float_status *fpst)
 {
-    uint8_t exp_mask = (1u << exp_bits) - 1;
-    uint8_t frac_mask = (1u << frac_bits) - 1;
-    bool sign = raw >> (exp_bits + frac_bits);
-    uint8_t exp = (raw >> frac_bits) & exp_mask;
-    uint8_t frac = raw & frac_mask;
+    bool sign = raw >> 7;
+    uint8_t exp = (raw >> 3) & 0x0f;
+    uint8_t frac = raw & 0x07;
     int16_t unbiased_exp;
     int32_t sig;
 
-    if (exp == exp_mask) {
+    if (exp == 0x0f && frac == 0x07) {
+        return float32_default_nan(fpst);
+    }
+
+    if (!exp) {
+        if (!frac) {
+            return make_float32(sign ? 0x80000000u : 0);
+        }
+        unbiased_exp = -6;
+        sig = frac;
+    } else {
+        unbiased_exp = exp - 7;
+        sig = 0x08 | frac;
+    }
+
+    return int32_to_float32_scalbn(sign ? -sig : sig,
+                                  unbiased_exp - 3, fpst);
+}
+
+static inline float32 xsmtame_mfmacc_e5_to_f32(uint8_t raw,
+                                                     float_status *fpst)
+{
+    bool sign = raw >> 7;
+    uint8_t exp = (raw >> 2) & 0x1f;
+    uint8_t frac = raw & 0x03;
+    int16_t unbiased_exp;
+    int32_t sig;
+
+    if (exp == 0x1f) {
         if (frac) {
             return float32_default_nan(fpst);
         }
@@ -903,27 +1010,15 @@ static inline float32 xsmtame_mfmacc_fp8_to_f32(uint8_t raw,
         if (!frac) {
             return make_float32(sign ? 0x80000000u : 0);
         }
-        unbiased_exp = 1 - exp_bias;
+        unbiased_exp = -14;
         sig = frac;
     } else {
-        unbiased_exp = exp - exp_bias;
-        sig = (1u << frac_bits) | frac;
+        unbiased_exp = exp - 15;
+        sig = 0x04 | frac;
     }
 
     return int32_to_float32_scalbn(sign ? -sig : sig,
-                                  unbiased_exp - frac_bits, fpst);
-}
-
-static inline float32 xsmtame_mfmacc_e4_to_f32(uint8_t raw,
-                                                     float_status *fpst)
-{
-    return xsmtame_mfmacc_fp8_to_f32(raw, 4, 3, 7, fpst);
-}
-
-static inline float32 xsmtame_mfmacc_e5_to_f32(uint8_t raw,
-                                                     float_status *fpst)
-{
-    return xsmtame_mfmacc_fp8_to_f32(raw, 5, 2, 15, fpst);
+                                  unbiased_exp - 2, fpst);
 }
 
 typedef struct AMEMfmaccInternal30 {
@@ -939,6 +1034,29 @@ typedef struct AMEMfmaccDecodedFloat {
     uint16_t sig;
     bool is_zero;
 } AMEMfmaccDecodedFloat;
+
+typedef struct AMEMfmaccSpecial {
+    bool sign;
+    bool is_zero;
+    bool is_inf;
+    bool is_qnan;
+    bool is_snan;
+} AMEMfmaccSpecial;
+
+typedef struct AMEMfmaccSpecialEval {
+    bool invalid;
+    bool qnan_seen;
+    bool pos_inf_seen;
+    bool neg_inf_seen;
+    bool all_zero_addends;
+    bool pos_zero_seen;
+    bool neg_zero_seen;
+} AMEMfmaccSpecialEval;
+
+enum {
+    XSMTAME_MFMACC_MAX_INTERNAL_K_16 = 2,
+    XSMTAME_MFMACC_MAX_INTERNAL_K_8 = 4,
+};
 
 static inline uint32_t xsmtame_mfmacc_shrjam32(uint32_t a, uint8_t dist)
 {
@@ -962,6 +1080,178 @@ static inline uint64_t xsmtame_mfmacc_shrjam64(uint64_t a, uint8_t dist)
     return a ? 1 : 0;
 }
 
+static AMEMfmaccSpecial xsmtame_mfmacc_classify_f32(float32 a)
+{
+    uint32_t ui = float32_val(a);
+    uint32_t exp = (ui >> 23) & 0xff;
+    uint32_t frac = ui & 0x007fffff;
+
+    return (AMEMfmaccSpecial) {
+        .sign = ui >> 31,
+        .is_zero = exp == 0 && frac == 0,
+        .is_inf = exp == 0xff && frac == 0,
+        .is_qnan = exp == 0xff && frac != 0 && (frac & 0x00400000) != 0,
+        .is_snan = exp == 0xff && frac != 0 && (frac & 0x00400000) == 0,
+    };
+}
+
+static AMEMfmaccSpecial xsmtame_mfmacc_classify_f16(uint16_t ui)
+{
+    uint16_t exp = (ui >> 10) & 0x1f;
+    uint16_t frac = ui & 0x03ff;
+
+    return (AMEMfmaccSpecial) {
+        .sign = ui >> 15,
+        .is_zero = exp == 0 && frac == 0,
+        .is_inf = exp == 0x1f && frac == 0,
+        .is_qnan = exp == 0x1f && frac != 0 && (frac & 0x0200) != 0,
+        .is_snan = exp == 0x1f && frac != 0 && (frac & 0x0200) == 0,
+    };
+}
+
+static AMEMfmaccSpecial xsmtame_mfmacc_classify_bf16(uint16_t ui)
+{
+    uint16_t exp = (ui >> 7) & 0xff;
+    uint16_t frac = ui & 0x007f;
+
+    return (AMEMfmaccSpecial) {
+        .sign = ui >> 15,
+        .is_zero = exp == 0 && frac == 0,
+        .is_inf = exp == 0xff && frac == 0,
+        .is_qnan = exp == 0xff && frac != 0 && (frac & 0x0040) != 0,
+        .is_snan = exp == 0xff && frac != 0 && (frac & 0x0040) == 0,
+    };
+}
+
+static AMEMfmaccSpecial xsmtame_mfmacc_classify_e4(uint8_t ui)
+{
+    uint8_t exp = (ui >> 3) & 0x0f;
+    uint8_t frac = ui & 0x07;
+
+    return (AMEMfmaccSpecial) {
+        .sign = ui >> 7,
+        .is_zero = exp == 0 && frac == 0,
+        .is_inf = false,
+        .is_qnan = exp == 0x0f && frac == 0x07,
+        .is_snan = false,
+    };
+}
+
+static AMEMfmaccSpecial xsmtame_mfmacc_classify_e5(uint8_t ui)
+{
+    uint8_t exp = (ui >> 2) & 0x1f;
+    uint8_t frac = ui & 0x03;
+
+    return (AMEMfmaccSpecial) {
+        .sign = ui >> 7,
+        .is_zero = exp == 0 && frac == 0,
+        .is_inf = exp == 0x1f && frac == 0,
+        .is_qnan = exp == 0x1f && frac != 0,
+        .is_snan = false,
+    };
+}
+
+static void xsmtame_mfmacc_special_init(AMEMfmaccSpecialEval *eval)
+{
+    eval->invalid = false;
+    eval->qnan_seen = false;
+    eval->pos_inf_seen = false;
+    eval->neg_inf_seen = false;
+    eval->all_zero_addends = true;
+    eval->pos_zero_seen = false;
+    eval->neg_zero_seen = false;
+}
+
+static void xsmtame_mfmacc_special_note_zero(AMEMfmaccSpecialEval *eval,
+                                             bool sign)
+{
+    if (sign) {
+        eval->neg_zero_seen = true;
+    } else {
+        eval->pos_zero_seen = true;
+    }
+}
+
+static void xsmtame_mfmacc_special_note_inf(AMEMfmaccSpecialEval *eval,
+                                            bool sign)
+{
+    eval->all_zero_addends = false;
+    if (sign) {
+        eval->neg_inf_seen = true;
+    } else {
+        eval->pos_inf_seen = true;
+    }
+}
+
+static void xsmtame_mfmacc_special_scan_c(AMEMfmaccSpecialEval *eval,
+                                          AMEMfmaccSpecial c)
+{
+    if (c.is_snan) {
+        eval->invalid = true;
+    } else if (c.is_qnan) {
+        eval->qnan_seen = true;
+    } else if (c.is_inf) {
+        xsmtame_mfmacc_special_note_inf(eval, c.sign);
+    } else if (c.is_zero) {
+        xsmtame_mfmacc_special_note_zero(eval, c.sign);
+    } else {
+        eval->all_zero_addends = false;
+    }
+}
+
+static void xsmtame_mfmacc_special_scan_product(AMEMfmaccSpecialEval *eval,
+                                                AMEMfmaccSpecial a,
+                                                AMEMfmaccSpecial b)
+{
+    if (a.is_snan || b.is_snan) {
+        eval->invalid = true;
+    } else if (a.is_qnan || b.is_qnan) {
+        eval->qnan_seen = true;
+    } else if ((a.is_zero && b.is_inf) || (a.is_inf && b.is_zero)) {
+        eval->invalid = true;
+    } else if (a.is_inf || b.is_inf) {
+        xsmtame_mfmacc_special_note_inf(eval, a.sign ^ b.sign);
+    } else if (a.is_zero || b.is_zero) {
+        xsmtame_mfmacc_special_note_zero(eval, a.sign ^ b.sign);
+    } else {
+        eval->all_zero_addends = false;
+    }
+}
+
+static bool xsmtame_mfmacc_special_finish_f32(const AMEMfmaccSpecialEval *eval,
+                                             float32 *out,
+                                             float_status *fpst)
+{
+    if (eval->invalid || (eval->pos_inf_seen && eval->neg_inf_seen)) {
+        float_raise(float_flag_invalid, fpst);
+        *out = make_float32(0x7fc00000u);
+        return true;
+    }
+    if (eval->qnan_seen) {
+        *out = make_float32(0x7fc00000u);
+        return true;
+    }
+    if (eval->pos_inf_seen || eval->neg_inf_seen) {
+        *out = make_float32((eval->neg_inf_seen ? 0x80000000u : 0) |
+                            0x7f800000u);
+        return true;
+    }
+    if (eval->all_zero_addends) {
+        bool sign;
+
+        if (eval->neg_zero_seen && !eval->pos_zero_seen) {
+            sign = true;
+        } else if (!eval->neg_zero_seen && eval->pos_zero_seen) {
+            sign = false;
+        } else {
+            sign = get_float_rounding_mode(fpst) == float_round_down;
+        }
+        *out = make_float32(sign ? 0x80000000u : 0);
+        return true;
+    }
+    return false;
+}
+
 static inline uint32_t xsmtame_mfmacc_round_to_odd32(uint32_t a,
                                                            uint8_t dist)
 {
@@ -975,6 +1265,71 @@ static inline uint32_t xsmtame_mfmacc_round_to_odd32(uint32_t a,
         z |= 1;
     }
     return z;
+}
+
+static uint32_t xsmtame_mfmacc_round_pack_subnormal_frac32(bool sign,
+                                                          uint32_t sig,
+                                                          uint16_t dist,
+                                                          float_status *fpst)
+{
+    FloatRoundMode rounding_mode = get_float_rounding_mode(fpst);
+    uint64_t sig_wide = sig;
+    uint64_t discarded;
+    uint64_t halfway;
+    uint32_t frac;
+    int flags = 0;
+
+    g_assert(dist != 0);
+
+    if (dist < 64) {
+        frac = sig_wide >> dist;
+        discarded = sig_wide & ((UINT64_C(1) << dist) - 1);
+        halfway = UINT64_C(1) << (dist - 1);
+    } else {
+        frac = 0;
+        discarded = sig_wide;
+        halfway = UINT64_MAX;
+    }
+
+    if (discarded != 0) {
+        switch (rounding_mode) {
+        case float_round_nearest_even:
+            if (discarded > halfway ||
+                (discarded == halfway && (frac & 1))) {
+                frac++;
+            }
+            break;
+        case float_round_ties_away:
+            if (discarded >= halfway) {
+                frac++;
+            }
+            break;
+        case float_round_down:
+            if (sign) {
+                frac++;
+            }
+            break;
+        case float_round_up:
+            if (!sign) {
+                frac++;
+            }
+            break;
+        case float_round_to_zero:
+            break;
+        default:
+            g_assert_not_reached();
+        }
+
+        flags |= float_flag_inexact;
+        if (get_float_detect_tininess(fpst) ==
+                float_tininess_before_rounding ||
+            frac < UINT32_C(0x00800000)) {
+            flags |= float_flag_underflow;
+        }
+        float_raise(flags, fpst);
+    }
+
+    return frac;
 }
 
 static bool xsmtame_mfmacc_decode_float(uint16_t ui,
@@ -1017,6 +1372,88 @@ static bool xsmtame_mfmacc_decode_float(uint16_t ui,
     return true;
 }
 
+static bool xsmtame_mfmacc_decode_e4(uint8_t ui,
+                                          AMEMfmaccDecodedFloat *out)
+{
+    uint16_t exp = (ui >> 3) & 0x0f;
+    uint16_t frac = ui & 0x07;
+    int16_t shift_dist;
+
+    out->sign = ui >> 7;
+    out->exp = 0;
+    out->sig = 0;
+    out->is_zero = false;
+
+    if (exp == 0x0f && frac == 0x07) {
+        return false;
+    }
+    if (!exp) {
+        if (!frac) {
+            out->is_zero = true;
+            return true;
+        }
+        shift_dist = 0;
+        while (frac < 0x08) {
+            frac <<= 1;
+            ++shift_dist;
+        }
+        out->exp = -6 - shift_dist;
+        out->sig = frac;
+        return true;
+    }
+
+    out->exp = (int16_t)exp - 7;
+    out->sig = 0x08 | frac;
+    return true;
+}
+
+static bool xsmtame_mfmacc_mul_decoded_to_internal30(
+    const AMEMfmaccDecodedFloat *a,
+    uint8_t frac_bits_a,
+    const AMEMfmaccDecodedFloat *b,
+    uint8_t frac_bits_b,
+    AMEMfmaccInternal30 *out)
+{
+    uint64_t sig_prod;
+    uint8_t frac_bits_prod;
+
+    out->sign = a->sign ^ b->sign;
+    out->exp = 0;
+    out->sig = 0;
+    out->is_zero = false;
+
+    if (a->is_zero || b->is_zero) {
+        out->is_zero = true;
+        return true;
+    }
+
+    sig_prod = (uint64_t)a->sig * (uint64_t)b->sig;
+    out->exp = a->exp + b->exp;
+    frac_bits_prod = frac_bits_a + frac_bits_b;
+
+    if (sig_prod & (((uint64_t)1) << (frac_bits_prod + 1))) {
+        /*
+         * The product is already normalized into [2, 4), so bump the
+         * exponent and account for the extra leading bit in the later
+         * internal30 scaling. Do not right shift `sig_prod` here: that would
+         * quantize an otherwise exact product (for example 1479 * 1461) one
+         * step too early and can produce a 0x20 FP32 error in `mfmacc.s.h`.
+         */
+        ++out->exp;
+        ++frac_bits_prod;
+    }
+
+    if (frac_bits_prod < 26) {
+        sig_prod <<= (26 - frac_bits_prod);
+    } else if (frac_bits_prod > 26) {
+        sig_prod = xsmtame_mfmacc_shrjam64(sig_prod,
+                                                frac_bits_prod - 26);
+    }
+
+    out->sig = (uint32_t)sig_prod;
+    return true;
+}
+
 static bool xsmtame_mfmacc_mul_float_to_internal30(uint16_t ui_a,
                                                         uint8_t exp_bits_a,
                                                         uint8_t frac_bits_a,
@@ -1029,8 +1466,6 @@ static bool xsmtame_mfmacc_mul_float_to_internal30(uint16_t ui_a,
 {
     AMEMfmaccDecodedFloat a;
     AMEMfmaccDecodedFloat b;
-    uint64_t sig_prod;
-    uint8_t frac_bits_prod;
 
     if (!xsmtame_mfmacc_decode_float(ui_a, exp_bits_a, frac_bits_a,
                                           exp_bias_a, &a) ||
@@ -1039,34 +1474,9 @@ static bool xsmtame_mfmacc_mul_float_to_internal30(uint16_t ui_a,
         return false;
     }
 
-    out->sign = a.sign ^ b.sign;
-    out->exp = 0;
-    out->sig = 0;
-    out->is_zero = false;
-
-    if (a.is_zero || b.is_zero) {
-        out->is_zero = true;
-        return true;
-    }
-
-    sig_prod = (uint64_t)a.sig * (uint64_t)b.sig;
-    out->exp = a.exp + b.exp;
-    frac_bits_prod = frac_bits_a + frac_bits_b;
-
-    if (sig_prod & (((uint64_t)1) << (frac_bits_prod + 1))) {
-        ++out->exp;
-        sig_prod = xsmtame_mfmacc_shrjam64(sig_prod, 1);
-    }
-
-    if (frac_bits_prod < 26) {
-        sig_prod <<= (26 - frac_bits_prod);
-    } else if (frac_bits_prod > 26) {
-        sig_prod = xsmtame_mfmacc_shrjam64(sig_prod,
-                                                frac_bits_prod - 26);
-    }
-
-    out->sig = (uint32_t)sig_prod;
-    return true;
+    return xsmtame_mfmacc_mul_decoded_to_internal30(&a, frac_bits_a,
+                                                         &b, frac_bits_b,
+                                                         out);
 }
 
 static inline bool xsmtame_mfmacc_mul_f16_to_internal30(uint16_t ui_a,
@@ -1091,9 +1501,16 @@ static inline bool xsmtame_mfmacc_mul_e4_to_internal30(uint8_t ui_a,
                                                              uint8_t ui_b,
                                                              AMEMfmaccInternal30 *out)
 {
-    return xsmtame_mfmacc_mul_float_to_internal30(ui_a, 4, 3, 7,
-                                                       ui_b, 4, 3, 7,
-                                                       out);
+    AMEMfmaccDecodedFloat a;
+    AMEMfmaccDecodedFloat b;
+
+    if (!xsmtame_mfmacc_decode_e4(ui_a, &a) ||
+        !xsmtame_mfmacc_decode_e4(ui_b, &b)) {
+        return false;
+    }
+
+    return xsmtame_mfmacc_mul_decoded_to_internal30(&a, 3,
+                                                    &b, 3, out);
 }
 
 static inline bool xsmtame_mfmacc_mul_e5_to_internal30(uint8_t ui_a,
@@ -1191,6 +1608,7 @@ static float32 xsmtame_mfmacc_internal30_to_f32(const AMEMfmaccInternal30 *a,
 {
     uint32_t ui_z;
     int16_t exp;
+    uint16_t shift_dist;
     uint32_t frac;
 
     if (a->is_zero) {
@@ -1200,7 +1618,15 @@ static float32 xsmtame_mfmacc_internal30_to_f32(const AMEMfmaccInternal30 *a,
 
     exp = a->exp + 127;
     if (exp <= 0) {
-        ui_z = (((uint32_t)a->sign) << 31);
+        /* Subnormals need one extra shift beyond the three guard bits. */
+        shift_dist = (uint16_t)(4 - exp);
+        frac = xsmtame_mfmacc_round_pack_subnormal_frac32(a->sign, a->sig,
+                                                         shift_dist, fpst);
+        if (frac >= UINT32_C(0x00800000)) {
+            ui_z = (((uint32_t)a->sign) << 31) | (1u << 23);
+        } else {
+            ui_z = (((uint32_t)a->sign) << 31) | frac;
+        }
         return make_float32(ui_z);
     }
     if (exp >= 0xFF) {
@@ -1209,11 +1635,42 @@ static float32 xsmtame_mfmacc_internal30_to_f32(const AMEMfmaccInternal30 *a,
         return make_float32(ui_z);
     }
 
+    if (a->sig & 0x00000007u) {
+        float_raise(float_flag_inexact, fpst);
+    }
     frac = xsmtame_mfmacc_round_to_odd32(a->sig, 3) & 0x007fffff;
     ui_z = (((uint32_t)a->sign) << 31) | ((uint32_t)exp << 23) | frac;
     return make_float32(ui_z);
 }
 
+static float32 xsmtame_mfmacc_add_internal30_to_f32_final(
+        const AMEMfmaccInternal30 *acc_int, float32 c, float_status *fpst)
+{
+    int old_flags = get_float_exception_flags(fpst);
+    int product_flags;
+    int final_flags;
+    float32 product;
+    float32 z;
+
+    set_float_exception_flags(0, fpst);
+    product = xsmtame_mfmacc_internal30_to_f32(acc_int, fpst);
+    product_flags = get_float_exception_flags(fpst);
+
+    set_float_exception_flags(0, fpst);
+    z = float32_add(product, c, fpst);
+    final_flags = get_float_exception_flags(fpst);
+    if ((float32_val(c) & 0x7fffffffu) == 0) {
+        final_flags |= product_flags;
+    }
+    set_float_exception_flags(old_flags | final_flags, fpst);
+    return z;
+}
+
+/*
+ * Large-k fallback only. Special values are screened before these helpers are
+ * reached; the remaining fallback is for dot products longer than the direct
+ * internal30 finite path models.
+ */
 static float32 xsmtame_mfmacc_reference_dot16(const uint16_t *lhs,
                                                    const uint16_t *rhs,
                                                    uint8_t k_cols,
@@ -1248,19 +1705,23 @@ static float32 xsmtame_mfmacc_reference_dot8(const uint8_t *lhs,
     return c;
 }
 
-static float32 xsmtame_mfmacc_cell16_internal30(const uint16_t *lhs,
-                                                     const uint16_t *rhs,
-                                                     uint8_t k_cols,
-                                                     float32 c,
-                                                     bool (*mul_to_internal)(uint16_t,
-                                                                             uint16_t,
-                                                                             AMEMfmaccInternal30 *),
-                                                     float32 (*fallback_convert)(uint16_t,
-                                                                                 float_status *),
-                                                     float_status *fpst)
+static float32 xsmtame_mfmacc_cell16(const uint16_t *lhs,
+                                     const uint16_t *rhs,
+                                     uint8_t k_cols,
+                                     uint8_t max_internal_k,
+                                     float32 c,
+                                     bool (*mul_to_internal)(uint16_t,
+                                                             uint16_t,
+                                                             AMEMfmaccInternal30 *),
+                                     float32 (*fallback_convert)(uint16_t,
+                                                                 float_status *),
+                                     AMEMfmaccSpecial (*classify)(uint16_t),
+                                     float_status *fpst)
 {
     AMEMfmaccInternal30 acc_int;
     AMEMfmaccInternal30 prod_list[4];
+    AMEMfmaccSpecialEval eval;
+    float32 special_z;
     uint8_t k;
 
     acc_int.sign = false;
@@ -1268,36 +1729,47 @@ static float32 xsmtame_mfmacc_cell16_internal30(const uint16_t *lhs,
     acc_int.sig = 0;
     acc_int.is_zero = true;
 
-    if (k_cols > 4) {
+    xsmtame_mfmacc_special_init(&eval);
+    xsmtame_mfmacc_special_scan_c(&eval,
+                                  xsmtame_mfmacc_classify_f32(c));
+    for (k = 0; k < k_cols; ++k) {
+        xsmtame_mfmacc_special_scan_product(&eval, classify(lhs[k]),
+                                            classify(rhs[k]));
+    }
+    if (xsmtame_mfmacc_special_finish_f32(&eval, &special_z, fpst)) {
+        return special_z;
+    }
+
+    if (k_cols > max_internal_k) {
         return xsmtame_mfmacc_reference_dot16(lhs, rhs, k_cols, c,
                                                    fallback_convert, fpst);
     }
 
     for (k = 0; k < k_cols; ++k) {
-        if (!mul_to_internal(lhs[k], rhs[k], &prod_list[k])) {
-            return xsmtame_mfmacc_reference_dot16(lhs, rhs, k_cols, c,
-                                                       fallback_convert, fpst);
-        }
+        mul_to_internal(lhs[k], rhs[k], &prod_list[k]);
     }
 
     xsmtame_mfmacc_add_internal30_unified(prod_list, k_cols, &acc_int);
-    return float32_add(xsmtame_mfmacc_internal30_to_f32(&acc_int, fpst),
-                       c, fpst);
+    return xsmtame_mfmacc_add_internal30_to_f32_final(&acc_int, c, fpst);
 }
 
-static float32 xsmtame_mfmacc_cell8_internal30(const uint8_t *lhs,
-                                                    const uint8_t *rhs,
-                                                    uint8_t k_cols,
-                                                    float32 c,
-                                                    bool (*mul_to_internal)(uint8_t,
-                                                                            uint8_t,
-                                                                            AMEMfmaccInternal30 *),
-                                                    float32 (*fallback_convert)(uint8_t,
-                                                                                float_status *),
-                                                    float_status *fpst)
+static float32 xsmtame_mfmacc_cell8(const uint8_t *lhs,
+                                    const uint8_t *rhs,
+                                    uint8_t k_cols,
+                                    uint8_t max_internal_k,
+                                    float32 c,
+                                    bool (*mul_to_internal)(uint8_t,
+                                                            uint8_t,
+                                                            AMEMfmaccInternal30 *),
+                                    float32 (*fallback_convert)(uint8_t,
+                                                                float_status *),
+                                    AMEMfmaccSpecial (*classify)(uint8_t),
+                                    float_status *fpst)
 {
     AMEMfmaccInternal30 acc_int;
     AMEMfmaccInternal30 prod_list[4];
+    AMEMfmaccSpecialEval eval;
+    float32 special_z;
     uint8_t k;
 
     acc_int.sign = false;
@@ -1305,21 +1777,28 @@ static float32 xsmtame_mfmacc_cell8_internal30(const uint8_t *lhs,
     acc_int.sig = 0;
     acc_int.is_zero = true;
 
-    if (k_cols > 4) {
+    xsmtame_mfmacc_special_init(&eval);
+    xsmtame_mfmacc_special_scan_c(&eval,
+                                  xsmtame_mfmacc_classify_f32(c));
+    for (k = 0; k < k_cols; ++k) {
+        xsmtame_mfmacc_special_scan_product(&eval, classify(lhs[k]),
+                                            classify(rhs[k]));
+    }
+    if (xsmtame_mfmacc_special_finish_f32(&eval, &special_z, fpst)) {
+        return special_z;
+    }
+
+    if (k_cols > max_internal_k) {
         return xsmtame_mfmacc_reference_dot8(lhs, rhs, k_cols, c,
                                                   fallback_convert, fpst);
     }
 
     for (k = 0; k < k_cols; ++k) {
-        if (!mul_to_internal(lhs[k], rhs[k], &prod_list[k])) {
-            return xsmtame_mfmacc_reference_dot8(lhs, rhs, k_cols, c,
-                                                      fallback_convert, fpst);
-        }
+        mul_to_internal(lhs[k], rhs[k], &prod_list[k]);
     }
 
     xsmtame_mfmacc_add_internal30_unified(prod_list, k_cols, &acc_int);
-    return float32_add(xsmtame_mfmacc_internal30_to_f32(&acc_int, fpst),
-                       c, fpst);
+    return xsmtame_mfmacc_add_internal30_to_f32_final(&acc_int, c, fpst);
 }
 
 static void xsmtame_mfmacc16_common(CPURISCVState *env, uint32_t md,
@@ -1328,7 +1807,8 @@ static void xsmtame_mfmacc16_common(CPURISCVState *env, uint32_t md,
                                                                  uint16_t,
                                                                  AMEMfmaccInternal30 *),
                                          float32 (*fallback_convert)(uint16_t,
-                                                                     float_status *))
+                                                                     float_status *),
+                                         AMEMfmaccSpecial (*classify)(uint16_t))
 {
     AMEShapeInfo shape = xsmtame_shape(env);
     const uint16_t *tA = xsmtame_tile16_ptr(env, ms1);
@@ -1344,13 +1824,15 @@ static void xsmtame_mfmacc16_common(CPURISCVState *env, uint32_t md,
     for (m = 0; m < shape.m; m++) {
         for (n = 0; n < shape.n; n++) {
             float32 c = make_float32(acc[m * acc_cols + n]);
-            c = xsmtame_mfmacc_cell16_internal30(&tA[m * a_cols],
-                                                      &tBT[n * b_cols],
-                                                      shape.k,
-                                                      c,
-                                                      mul_to_internal,
-                                                      fallback_convert,
-                                                      fpst);
+            c = xsmtame_mfmacc_cell16(&tA[m * a_cols],
+                                      &tBT[n * b_cols],
+                                      shape.k,
+                                      XSMTAME_MFMACC_MAX_INTERNAL_K_16,
+                                      c,
+                                      mul_to_internal,
+                                      fallback_convert,
+                                      classify,
+                                      fpst);
             acc[m * acc_cols + n] = float32_val(c);
         }
     }
@@ -1364,7 +1846,8 @@ static void xsmtame_mfmacc8_common(CPURISCVState *env, uint32_t md,
                                                                 uint8_t,
                                                                 AMEMfmaccInternal30 *),
                                         float32 (*fallback_convert)(uint8_t,
-                                                                    float_status *))
+                                                                    float_status *),
+                                        AMEMfmaccSpecial (*classify)(uint8_t))
 {
     AMEShapeInfo shape = xsmtame_shape(env);
     const uint8_t *tA = (const uint8_t *)xsmtame_tile_ptr(env, ms1);
@@ -1380,13 +1863,15 @@ static void xsmtame_mfmacc8_common(CPURISCVState *env, uint32_t md,
     for (m = 0; m < shape.m; m++) {
         for (n = 0; n < shape.n; n++) {
             float32 c = make_float32(acc[m * acc_cols + n]);
-            c = xsmtame_mfmacc_cell8_internal30(&tA[m * a_row_bytes],
-                                                     &tBT[n * b_row_bytes],
-                                                     shape.k,
-                                                     c,
-                                                     mul_to_internal,
-                                                     fallback_convert,
-                                                     fpst);
+            c = xsmtame_mfmacc_cell8(&tA[m * a_row_bytes],
+                                     &tBT[n * b_row_bytes],
+                                     shape.k,
+                                     XSMTAME_MFMACC_MAX_INTERNAL_K_8,
+                                     c,
+                                     mul_to_internal,
+                                     fallback_convert,
+                                     classify,
+                                     fpst);
             acc[m * acc_cols + n] = float32_val(c);
         }
     }
@@ -1418,13 +1903,15 @@ static void xsmtame_mfmacc16_acc16_common(CPURISCVState *env, uint32_t md,
     for (m = 0; m < shape.m; m++) {
         for (n = 0; n < shape.n; n++) {
             float32 c = acc_to_f32(acc[m * acc_cols + n], fpst);
-            c = xsmtame_mfmacc_cell16_internal30(&tA[m * a_cols],
-                                                      &tBT[n * b_cols],
-                                                      shape.k,
-                                                      c,
-                                                      mul_to_internal,
-                                                      xsmtame_mfmacc_fp16_to_f32,
-                                                      fpst);
+            c = xsmtame_mfmacc_cell16(&tA[m * a_cols],
+                                      &tBT[n * b_cols],
+                                      shape.k,
+                                      XSMTAME_MFMACC_MAX_INTERNAL_K_16,
+                                      c,
+                                      mul_to_internal,
+                                      xsmtame_mfmacc_fp16_to_f32,
+                                      xsmtame_mfmacc_classify_f16,
+                                      fpst);
             acc[m * acc_cols + n] = f32_to_acc(c, fpst);
         }
     }
@@ -1442,7 +1929,8 @@ static void xsmtame_mfmacc8_acc16_common(CPURISCVState *env, uint32_t md,
                                               uint16_t (*f32_to_acc)(float32,
                                                                      float_status *),
                                               float32 (*fallback_convert)(uint8_t,
-                                                                          float_status *))
+                                                                          float_status *),
+                                              AMEMfmaccSpecial (*classify)(uint8_t))
 {
     AMEShapeInfo shape = xsmtame_shape(env);
     const uint8_t *tA = (const uint8_t *)xsmtame_tile_ptr(env, ms1);
@@ -1458,13 +1946,15 @@ static void xsmtame_mfmacc8_acc16_common(CPURISCVState *env, uint32_t md,
     for (m = 0; m < shape.m; m++) {
         for (n = 0; n < shape.n; n++) {
             float32 c = acc_to_f32(acc[m * acc_cols + n], fpst);
-            c = xsmtame_mfmacc_cell8_internal30(&tA[m * a_row_bytes],
-                                                     &tBT[n * b_row_bytes],
-                                                     shape.k,
-                                                     c,
-                                                     mul_to_internal,
-                                                     fallback_convert,
-                                                     fpst);
+            c = xsmtame_mfmacc_cell8(&tA[m * a_row_bytes],
+                                     &tBT[n * b_row_bytes],
+                                     shape.k,
+                                     XSMTAME_MFMACC_MAX_INTERNAL_K_8,
+                                     c,
+                                     mul_to_internal,
+                                     fallback_convert,
+                                     classify,
+                                     fpst);
             acc[m * acc_cols + n] = f32_to_acc(c, fpst);
         }
     }
@@ -1479,7 +1969,8 @@ void HELPER(xsmtame_mfmacc_h_e5)(CPURISCVState *env, uint32_t md,
                                       xsmtame_mfmacc_mul_e5_to_internal30,
                                       xsmtame_mfmacc_fp16_to_f32,
                                       xsmtame_mfmacc_f32_to_f16_bits,
-                                      xsmtame_mfmacc_e5_to_f32);
+                                      xsmtame_mfmacc_e5_to_f32,
+                                      xsmtame_mfmacc_classify_e5);
 }
 
 void HELPER(xsmtame_mfmacc_h_e4)(CPURISCVState *env, uint32_t md,
@@ -1489,7 +1980,8 @@ void HELPER(xsmtame_mfmacc_h_e4)(CPURISCVState *env, uint32_t md,
                                       xsmtame_mfmacc_mul_e4_to_internal30,
                                       xsmtame_mfmacc_fp16_to_f32,
                                       xsmtame_mfmacc_f32_to_f16_bits,
-                                      xsmtame_mfmacc_e4_to_f32);
+                                      xsmtame_mfmacc_e4_to_f32,
+                                      xsmtame_mfmacc_classify_e4);
 }
 
 void HELPER(xsmtame_mfmacc_bf16_e5)(CPURISCVState *env, uint32_t md,
@@ -1499,7 +1991,8 @@ void HELPER(xsmtame_mfmacc_bf16_e5)(CPURISCVState *env, uint32_t md,
                                       xsmtame_mfmacc_mul_e5_to_internal30,
                                       xsmtame_mfmacc_bf16_to_f32,
                                       xsmtame_mfmacc_f32_to_bf16_bits,
-                                      xsmtame_mfmacc_e5_to_f32);
+                                      xsmtame_mfmacc_e5_to_f32,
+                                      xsmtame_mfmacc_classify_e5);
 }
 
 void HELPER(xsmtame_mfmacc_bf16_e4)(CPURISCVState *env, uint32_t md,
@@ -1509,7 +2002,8 @@ void HELPER(xsmtame_mfmacc_bf16_e4)(CPURISCVState *env, uint32_t md,
                                       xsmtame_mfmacc_mul_e4_to_internal30,
                                       xsmtame_mfmacc_bf16_to_f32,
                                       xsmtame_mfmacc_f32_to_bf16_bits,
-                                      xsmtame_mfmacc_e4_to_f32);
+                                      xsmtame_mfmacc_e4_to_f32,
+                                      xsmtame_mfmacc_classify_e4);
 }
 
 void HELPER(xsmtame_mfmacc_h)(CPURISCVState *env, uint32_t md,
@@ -1526,7 +2020,8 @@ void HELPER(xsmtame_mfmacc_s_e5)(CPURISCVState *env, uint32_t md,
 {
     xsmtame_mfmacc8_common(env, md, ms2, ms1,
                                 xsmtame_mfmacc_mul_e5_to_internal30,
-                                xsmtame_mfmacc_e5_to_f32);
+                                xsmtame_mfmacc_e5_to_f32,
+                                xsmtame_mfmacc_classify_e5);
 }
 
 void HELPER(xsmtame_mfmacc_s_e4)(CPURISCVState *env, uint32_t md,
@@ -1534,7 +2029,8 @@ void HELPER(xsmtame_mfmacc_s_e4)(CPURISCVState *env, uint32_t md,
 {
     xsmtame_mfmacc8_common(env, md, ms2, ms1,
                                 xsmtame_mfmacc_mul_e4_to_internal30,
-                                xsmtame_mfmacc_e4_to_f32);
+                                xsmtame_mfmacc_e4_to_f32,
+                                xsmtame_mfmacc_classify_e4);
 }
 
 void HELPER(xsmtame_mfmacc_s_h)(CPURISCVState *env, uint32_t md,
@@ -1542,7 +2038,8 @@ void HELPER(xsmtame_mfmacc_s_h)(CPURISCVState *env, uint32_t md,
 {
     xsmtame_mfmacc16_common(env, md, ms2, ms1,
                                  xsmtame_mfmacc_mul_f16_to_internal30,
-                                 xsmtame_mfmacc_fp16_to_f32);
+                                 xsmtame_mfmacc_fp16_to_f32,
+                                 xsmtame_mfmacc_classify_f16);
 }
 
 void HELPER(xsmtame_mfmacc_s_bf16)(CPURISCVState *env, uint32_t md,
@@ -1550,7 +2047,8 @@ void HELPER(xsmtame_mfmacc_s_bf16)(CPURISCVState *env, uint32_t md,
 {
     xsmtame_mfmacc16_common(env, md, ms2, ms1,
                                  xsmtame_mfmacc_mul_bf16_to_internal30,
-                                 xsmtame_mfmacc_bf16_to_f32);
+                                 xsmtame_mfmacc_bf16_to_f32,
+                                 xsmtame_mfmacc_classify_bf16);
 }
 /*
  * ──────────────────────────────────────────
@@ -1655,6 +2153,60 @@ void HELPER(xsmtame_mmovd_m_x)(CPURISCVState *env, uint32_t md,
     xsmtame_mmov_m_x_common(env, md, idx, value, 8);
 }
 
+static void xsmtame_mdup_common(CPURISCVState *env, uint32_t md,
+                                target_ulong value, size_t elem_size)
+{
+    size_t reg_size;
+    uint8_t *dst = xsmtame_matrix_ptr(env, md, &reg_size);
+    size_t off;
+
+    g_assert(elem_size != 0);
+    g_assert(reg_size % elem_size == 0);
+
+    for (off = 0; off < reg_size; off += elem_size) {
+        switch (elem_size) {
+        case 1:
+            stb_p(dst + off, value);
+            break;
+        case 2:
+            stw_le_p(dst + off, value);
+            break;
+        case 4:
+            stl_le_p(dst + off, value);
+            break;
+        case 8:
+            stq_le_p(dst + off, value);
+            break;
+        default:
+            g_assert_not_reached();
+        }
+    }
+}
+
+void HELPER(xsmtame_mdupb_m_x)(CPURISCVState *env, uint32_t md,
+                               target_ulong value)
+{
+    xsmtame_mdup_common(env, md, value, 1);
+}
+
+void HELPER(xsmtame_mduph_m_x)(CPURISCVState *env, uint32_t md,
+                               target_ulong value)
+{
+    xsmtame_mdup_common(env, md, value, 2);
+}
+
+void HELPER(xsmtame_mdupw_m_x)(CPURISCVState *env, uint32_t md,
+                               target_ulong value)
+{
+    xsmtame_mdup_common(env, md, value, 4);
+}
+
+void HELPER(xsmtame_mdupd_m_x)(CPURISCVState *env, uint32_t md,
+                               target_ulong value)
+{
+    xsmtame_mdup_common(env, md, value, 8);
+}
+
 static void xsmtame_mpack_common(CPURISCVState *env, uint32_t md,
                                       uint32_t ms2, uint32_t ms1,
                                       bool high1, bool high2)
@@ -1683,6 +2235,62 @@ static void xsmtame_mpack_common(CPURISCVState *env, uint32_t md,
         memcpy(tmp + off + half,
                src2 + off + (high2 ? half : 0),
                half);
+    }
+
+    memcpy(dst, tmp, reg_size);
+}
+
+static void xsmtame_mrbc_common(CPURISCVState *env, uint32_t md,
+                                uint32_t ms1, uint32_t amount)
+{
+    size_t reg_size;
+    uint8_t tmp[AME_ACC_LEN_B];
+    uint8_t *dst = xsmtame_matrix_ptr(env, md, &reg_size);
+    uint8_t *src = xsmtame_matrix_ptr(env, ms1, NULL);
+    size_t row_bytes = xsmtame_matrix_layout(env, md, 0).row_bytes;
+    size_t rows = reg_size / row_bytes;
+    size_t row;
+
+    xsmtame_validate_same_matrix_layout(env, md, ms1);
+
+    if (rows != 0) {
+        amount &= rows - 1;
+    }
+
+    for (row = 0; row < rows; row++) {
+        memcpy(tmp + row * row_bytes, src + amount * row_bytes, row_bytes);
+    }
+
+    memcpy(dst, tmp, reg_size);
+}
+
+static void xsmtame_mcbc_common(CPURISCVState *env, uint32_t md,
+                                uint32_t ms1, uint32_t amount,
+                                size_t elem_size)
+{
+    size_t reg_size;
+    uint8_t tmp[AME_ACC_LEN_B];
+    uint8_t *dst = xsmtame_matrix_ptr(env, md, &reg_size);
+    uint8_t *src = xsmtame_matrix_ptr(env, ms1, NULL);
+    size_t row_bytes = xsmtame_matrix_layout(env, md, 0).row_bytes;
+    size_t rows = reg_size / row_bytes;
+    size_t cols = xsmtame_matrix_layout(env, md, elem_size).cols;
+    size_t row;
+    size_t col;
+
+    xsmtame_validate_same_matrix_layout(env, md, ms1);
+
+    if (cols != 0) {
+        amount &= cols - 1;
+    }
+
+    for (row = 0; row < rows; row++) {
+        uint8_t *dst_row = tmp + row * row_bytes;
+        uint8_t *src_elem = src + row * row_bytes + amount * elem_size;
+
+        for (col = 0; col < cols; col++) {
+            memcpy(dst_row + col * elem_size, src_elem, elem_size);
+        }
     }
 
     memcpy(dst, tmp, reg_size);
@@ -1822,6 +2430,12 @@ void HELPER(xsmtame_mcslidedown_w)(CPURISCVState *env, uint32_t md,
     xsmtame_mcslide_common(env, md, ms1, amount, 4, false);
 }
 
+void HELPER(xsmtame_mcslidedown_d)(CPURISCVState *env, uint32_t md,
+                                        uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcslide_common(env, md, ms1, amount, 8, false);
+}
+
 void HELPER(xsmtame_mcslideup_b)(CPURISCVState *env, uint32_t md,
                                       uint32_t ms1, uint32_t amount)
 {
@@ -1838,6 +2452,42 @@ void HELPER(xsmtame_mcslideup_w)(CPURISCVState *env, uint32_t md,
                                       uint32_t ms1, uint32_t amount)
 {
     xsmtame_mcslide_common(env, md, ms1, amount, 4, true);
+}
+
+void HELPER(xsmtame_mcslideup_d)(CPURISCVState *env, uint32_t md,
+                                      uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcslide_common(env, md, ms1, amount, 8, true);
+}
+
+void HELPER(xsmtame_mrbca_mv_i)(CPURISCVState *env, uint32_t md,
+                                     uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mrbc_common(env, md, ms1, amount);
+}
+
+void HELPER(xsmtame_mcbcab_mv_i)(CPURISCVState *env, uint32_t md,
+                                      uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcbc_common(env, md, ms1, amount, 1);
+}
+
+void HELPER(xsmtame_mcbcah_mv_i)(CPURISCVState *env, uint32_t md,
+                                      uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcbc_common(env, md, ms1, amount, 2);
+}
+
+void HELPER(xsmtame_mcbcaw_mv_i)(CPURISCVState *env, uint32_t md,
+                                      uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcbc_common(env, md, ms1, amount, 4);
+}
+
+void HELPER(xsmtame_mcbcad_mv_i)(CPURISCVState *env, uint32_t md,
+                                      uint32_t ms1, uint32_t amount)
+{
+    xsmtame_mcbc_common(env, md, ms1, amount, 8);
 }
 
 /*

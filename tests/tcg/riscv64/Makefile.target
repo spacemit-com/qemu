@@ -23,4 +23,5 @@ TESTS += test-ame-misc
 run-test-ame-misc: QEMU_OPTS += -cpu rv64,xsmtame=true,xsmtame-version=0.6
 
 TESTS += test-ame-mmacc
-run-test-ame-mmacc: QEMU_OPTS += -cpu rv64,xsmtame=true,xsmtame-version=0.6
+run-test-ame-mmacc: QEMU_OPTS += \
+    -cpu rv64,f=true,d=true,xsmtame=true,xsmtame-version=0.6,ame_tlen=1024,ame_trlen=32

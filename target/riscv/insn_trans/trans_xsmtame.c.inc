@@ -698,6 +698,7 @@ static bool trans_mfmacc_h_e5(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_h_e5(tcg_env,
                                 tcg_constant_i32(a->mx_ad2),
                                 tcg_constant_i32(a->mx_ms2_3),
@@ -716,6 +717,7 @@ static bool trans_mfmacc_h_e4(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_h_e4(tcg_env,
                                 tcg_constant_i32(a->mx_ad2),
                                 tcg_constant_i32(a->mx_ms2_3),
@@ -734,6 +736,7 @@ static bool trans_mfmacc_bf16_e5(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_bf16_e5(tcg_env,
                                    tcg_constant_i32(a->mx_ad2),
                                    tcg_constant_i32(a->mx_ms2_3),
@@ -752,6 +755,7 @@ static bool trans_mfmacc_bf16_e4(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_bf16_e4(tcg_env,
                                    tcg_constant_i32(a->mx_ad2),
                                    tcg_constant_i32(a->mx_ms2_3),
@@ -770,6 +774,7 @@ static bool trans_mfmacc_h(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_h(tcg_env,
                              tcg_constant_i32(a->mx_ad2),
                              tcg_constant_i32(a->mx_ms2_3),
@@ -788,6 +793,7 @@ static bool trans_mfmacc_s_h(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_s_h(tcg_env,
                               tcg_constant_i32(a->mx_ad2),
                               tcg_constant_i32(a->mx_ms2_3),
@@ -806,6 +812,7 @@ static bool trans_mfmacc_s_bf16(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_s_bf16(tcg_env,
                                   tcg_constant_i32(a->mx_ad2),
                                   tcg_constant_i32(a->mx_ms2_3),
@@ -824,6 +831,7 @@ static bool trans_mfmacc_s_e4(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_s_e4(tcg_env,
                                 tcg_constant_i32(a->mx_ad2),
                                 tcg_constant_i32(a->mx_ms2_3),
@@ -842,6 +850,7 @@ static bool trans_mfmacc_s_e5(DisasContext *s, arg_ame_matmul_acc *a)
                      ame_is_tile_reg_3(a->mx_ms2_3), s)) {
         return false;
     }
+    gen_set_rm(s, RISCV_FRM_DYN);
     gen_helper_xsmtame_mfmacc_s_e5(tcg_env,
                                 tcg_constant_i32(a->mx_ad2),
                                 tcg_constant_i32(a->mx_ms2_3),
@@ -1116,6 +1125,62 @@ static bool trans_mmovd_m_x(DisasContext *s, arg_ame_misc_from_gpr *a)
     return true;
 }
 
+static bool trans_mdupb_m_x(DisasContext *s, arg_ame_misc_dup *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mdupb_m_x(tcg_env,
+                                      tcg_constant_i32(a->mx_md3),
+                                      get_gpr(s, a->mx_rs2, EXT_NONE));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mduph_m_x(DisasContext *s, arg_ame_misc_dup *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mduph_m_x(tcg_env,
+                                      tcg_constant_i32(a->mx_md3),
+                                      get_gpr(s, a->mx_rs2, EXT_NONE));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mdupw_m_x(DisasContext *s, arg_ame_misc_dup *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mdupw_m_x(tcg_env,
+                                      tcg_constant_i32(a->mx_md3),
+                                      get_gpr(s, a->mx_rs2, EXT_NONE));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mdupd_m_x(DisasContext *s, arg_ame_misc_dup *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mdupd_m_x(tcg_env,
+                                      tcg_constant_i32(a->mx_md3),
+                                      get_gpr(s, a->mx_rs2, EXT_NONE));
+    mark_ms_dirty(s);
+    return true;
+}
+
 static bool trans_mpack_mm(DisasContext *s, arg_ame_misc_rrr *a)
 {
     if (!require_xsmtame(s) ||
@@ -1258,6 +1323,23 @@ static bool trans_mcslidedown_w(DisasContext *s, arg_ame_misc_slide *a)
     return true;
 }
 
+static bool trans_mcslidedown_d(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcslidedown_d(tcg_env,
+                                          tcg_constant_i32(a->mx_md3),
+                                          tcg_constant_i32(a->mx_ms1_3),
+                                          tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
 static bool trans_mcslideup_b(DisasContext *s, arg_ame_misc_slide *a)
 {
     if (!require_xsmtame(s) ||
@@ -1302,6 +1384,108 @@ static bool trans_mcslideup_w(DisasContext *s, arg_ame_misc_slide *a)
     }
 
     gen_helper_xsmtame_mcslideup_w(tcg_env,
+                                        tcg_constant_i32(a->mx_md3),
+                                        tcg_constant_i32(a->mx_ms1_3),
+                                        tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mcslideup_d(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcslideup_d(tcg_env,
+                                        tcg_constant_i32(a->mx_md3),
+                                        tcg_constant_i32(a->mx_ms1_3),
+                                        tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mrbca_mv_i(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mrbca_mv_i(tcg_env,
+                                       tcg_constant_i32(a->mx_md3),
+                                       tcg_constant_i32(a->mx_ms1_3),
+                                       tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mcbcab_mv_i(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcbcab_mv_i(tcg_env,
+                                        tcg_constant_i32(a->mx_md3),
+                                        tcg_constant_i32(a->mx_ms1_3),
+                                        tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mcbcah_mv_i(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcbcah_mv_i(tcg_env,
+                                        tcg_constant_i32(a->mx_md3),
+                                        tcg_constant_i32(a->mx_ms1_3),
+                                        tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mcbcaw_mv_i(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcbcaw_mv_i(tcg_env,
+                                        tcg_constant_i32(a->mx_md3),
+                                        tcg_constant_i32(a->mx_ms1_3),
+                                        tcg_constant_i32(a->mx_uimm3));
+    mark_ms_dirty(s);
+    return true;
+}
+
+static bool trans_mcbcad_mv_i(DisasContext *s, arg_ame_misc_slide *a)
+{
+    if (!require_xsmtame(s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_md3), s) ||
+        !ame_require(ame_check_matrix_reg_3(a->mx_ms1_3), s) ||
+        !ame_require(ame_same_reg_class_3(a->mx_md3, a->mx_ms1_3), s)) {
+        return false;
+    }
+
+    gen_helper_xsmtame_mcbcad_mv_i(tcg_env,
                                         tcg_constant_i32(a->mx_md3),
                                         tcg_constant_i32(a->mx_ms1_3),
                                         tcg_constant_i32(a->mx_uimm3));

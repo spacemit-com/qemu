@@ -127,6 +127,11 @@ DEF_HELPER_4(xsmtame_mmovb_m_x, void, env, i32, tl, tl)
 DEF_HELPER_4(xsmtame_mmovh_m_x, void, env, i32, tl, tl)
 DEF_HELPER_4(xsmtame_mmovw_m_x, void, env, i32, tl, tl)
 DEF_HELPER_4(xsmtame_mmovd_m_x, void, env, i32, tl, tl)
+/* mdup{b,h,w,d}.m.x md, rs2 : duplicate one GPR element into matrix */
+DEF_HELPER_3(xsmtame_mdupb_m_x, void, env, i32, tl)
+DEF_HELPER_3(xsmtame_mduph_m_x, void, env, i32, tl)
+DEF_HELPER_3(xsmtame_mdupw_m_x, void, env, i32, tl)
+DEF_HELPER_3(xsmtame_mdupd_m_x, void, env, i32, tl)
 /* mpack*.mm md, ms2, ms1 : pack low/high half-columns from same-class sources */
 DEF_HELPER_4(xsmtame_mpack_mm, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mpackhl_mm, void, env, i32, i32, i32)
@@ -138,9 +143,17 @@ DEF_HELPER_4(xsmtame_mrslideup, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslidedown_b, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslidedown_h, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslidedown_w, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcslidedown_d, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslideup_b, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslideup_h, void, env, i32, i32, i32)
 DEF_HELPER_4(xsmtame_mcslideup_w, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcslideup_d, void, env, i32, i32, i32)
+/* mrbc/mcbc md, ms1, uimm3 : broadcast rows/columns */
+DEF_HELPER_4(xsmtame_mrbca_mv_i, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcbcab_mv_i, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcbcah_mv_i, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcbcaw_mv_i, void, env, i32, i32, i32)
+DEF_HELPER_4(xsmtame_mcbcad_mv_i, void, env, i32, i32, i32)
 
 /* --- Control --- */
 /* mzero{,2,4,8}r : zero count matrix registers starting at md */

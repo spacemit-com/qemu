@@ -99,6 +99,8 @@
 #define MMACC_W_B(ad, ms2, ms1) AME_MATMUL_ENC(0x1, 0x3, ad, ms2, ms1)
 
 #define MFMACC_S_H(ad, ms2, ms1) AME_MATMUL_SRC_ENC(0x0, 0x0, 0x1, ad, ms2, ms1)
+#define MFMACC_S_BF16(ad, ms2, ms1) \
+    AME_MATMUL_SRC_ENC(0x0, 0x1, 0x1, ad, ms2, ms1)
 #define MFMACC_H(ad, ms2, ms1) AME_MATMUL_ACC16_ENC(0x0, 0x0, 0x1, ad, ms2, ms1)
 
 #define MMOV_MM(md, ms1) AME_MISC_MM_ENC(0x1, 0x0, md, 0, ms1)
